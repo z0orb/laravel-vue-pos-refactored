@@ -62,9 +62,7 @@ class TransactionController extends Controller
         }
         Transaction::find($order->id)->update(['total' => $totalPrice, 'total_ppn' => $totalPpn]);
 
-        $product = Product::find($item->productId());
-        $product->stock = $product->stock - $item->quantity();
-        $product->save();
+        Product::find($item->productId())->reduceStock($item->quantity());
 
         return response()->json(['status' => true, 'message' => '<b>Transaksi Sukses!</b> <br>Total Harga: <b>Rp'.number_format($totalPrice)."</b><br>Jumlah Bayar: <b>Rp ".number_format($r->bayar)."</b><br>Kembalian: <b>Rp ".number_format($r->kembalian)."</b><br>Invoice: <a href='".url("transaksi/invoice/".$order->invoice)."'>Klik Disini</a>"]);
     }
