@@ -31,9 +31,23 @@ class TransactionController extends Controller
 
     
     public function newTransaction(Request $r) {
-        $customer = $r->customer || 1;
-        $payment_method = $r->payment_method || 1;
-        $order = Transaction::create([
+        $order = $this->createOrder($r);
+        $items = array_map([CartItem::class, 'fromArray'], $r->cart);
+
+        $order->update($this->saveOrderDetails($order, $items));
+
+        // Perilaku lama dipertahankan: hanya stok item terakhir yang dikurangi.
+        $lastItem = end($items);
+        Product::find($lastItem->productId())->reduceStock($lastItem->quantity());
+
+        return response()->json([
+            'status' => true,
+            'message' => $this->successMessage($order, $r->bayar, $r->kembalian),
+        ]);
+    }
+
+    private function createOrder(Request $r) {
+        return Transaction::create([
             'invoice' => Uuid::uuid4(),
             'user_id' => Auth::user()->id,
             'total' => 0,
@@ -43,11 +57,15 @@ class TransactionController extends Controller
             'payment_method_id' => $r->payment_method,
             'customer_id' => $r->customer,
         ]);
-        $totalPrice = 0;
-        $totalPpn = 0;
-        foreach($r->cart as $data_cart) {
-            $item = CartItem::fromArray($data_cart);
+    }
 
+    /**
+     * Simpan setiap item sebagai detail order, lalu kembalikan total order.
+     */
+    private function saveOrderDetails(Transaction $order, array $items) {
+        $totals = ['total' => 0, 'total_ppn' => 0];
+
+        foreach ($items as $item) {
             TransactionDetail::create([
                 'order_id' => $order->id,
                 'product_id' => $item->productId(),
@@ -57,14 +75,18 @@ class TransactionController extends Controller
                 'ppn' => $item->ppnAmount()
             ]);
 
-            $totalPrice += $item->subtotal();
-            $totalPpn += $item->ppnAmount();
+            $totals['total'] += $item->subtotal();
+            $totals['total_ppn'] += $item->ppnAmount();
         }
-        Transaction::find($order->id)->update(['total' => $totalPrice, 'total_ppn' => $totalPpn]);
 
-        Product::find($item->productId())->reduceStock($item->quantity());
+        return $totals;
+    }
 
-        return response()->json(['status' => true, 'message' => '<b>Transaksi Sukses!</b> <br>Total Harga: <b>Rp'.number_format($totalPrice)."</b><br>Jumlah Bayar: <b>Rp ".number_format($r->bayar)."</b><br>Kembalian: <b>Rp ".number_format($r->kembalian)."</b><br>Invoice: <a href='".url("transaksi/invoice/".$order->invoice)."'>Klik Disini</a>"]);
+    private function successMessage(Transaction $order, $bayar, $kembalian) {
+        return '<b>Transaksi Sukses!</b> <br>Total Harga: <b>Rp'.number_format($order->total)
+            ."</b><br>Jumlah Bayar: <b>Rp ".number_format($bayar)
+            ."</b><br>Kembalian: <b>Rp ".number_format($kembalian)
+            ."</b><br>Invoice: <a href='".url("transaksi/invoice/".$order->invoice)."'>Klik Disini</a>";
     }
 
     public function history(Request $request) {
