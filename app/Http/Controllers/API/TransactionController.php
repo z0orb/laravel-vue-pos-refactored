@@ -8,6 +8,7 @@ use App\Model\Transaction;
 use App\Model\TransactionDetail;
 use App\Model\Product;
 use App\Http\Resources\TransactionCollection;
+use App\ValueObjects\CartItem;
 use Ramsey\Uuid\Uuid;
 use Auth;
 
@@ -45,30 +46,24 @@ class TransactionController extends Controller
         $totalPrice = 0;
         $totalPpn = 0;
         foreach($r->cart as $data_cart) {
-            $quantity = $data_cart['quantity'];
-            $ppn = $data_cart['ppn'];
-            $price = $data_cart['price'];
-            $ppnnya = ($data_cart['realPrice'] * $ppn/100);
-            $realPrice = $data_cart['realPrice'] + $ppnnya;
+            $item = CartItem::fromArray($data_cart);
 
-            $subtotal = $realPrice * $quantity;
-
-            $create = TransactionDetail::create([
+            TransactionDetail::create([
                 'order_id' => $order->id,
-                'product_id' => $data_cart['id'],
-                'quantity' => $data_cart['quantity'],
-                'price' => $realPrice,
-                'subtotal' => $subtotal,
-                'ppn' => $ppnnya
+                'product_id' => $item->productId(),
+                'quantity' => $item->quantity(),
+                'price' => $item->unitPrice(),
+                'subtotal' => $item->subtotal(),
+                'ppn' => $item->ppnAmount()
             ]);
-            
-            $totalPrice += $subtotal;
-            $totalPpn += $ppnnya;
+
+            $totalPrice += $item->subtotal();
+            $totalPpn += $item->ppnAmount();
         }
         Transaction::find($order->id)->update(['total' => $totalPrice, 'total_ppn' => $totalPpn]);
 
-        $product = Product::find($data_cart['id']);
-        $product->stock = $product->stock - $data_cart['quantity'];
+        $product = Product::find($item->productId());
+        $product->stock = $product->stock - $item->quantity();
         $product->save();
 
         return response()->json(['status' => true, 'message' => '<b>Transaksi Sukses!</b> <br>Total Harga: <b>Rp'.number_format($totalPrice)."</b><br>Jumlah Bayar: <b>Rp ".number_format($r->bayar)."</b><br>Kembalian: <b>Rp ".number_format($r->kembalian)."</b><br>Invoice: <a href='".url("transaksi/invoice/".$order->invoice)."'>Klik Disini</a>"]);
