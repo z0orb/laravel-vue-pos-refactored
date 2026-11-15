@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API;
 
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\StoresUploadedImages;
 use App\Http\Resources\UserCollection;
 use App\User;
 use Hash;
@@ -11,6 +12,8 @@ use Validator;
 
 class UsersController extends Controller
 {
+    use StoresUploadedImages;
+
     /**
      * Display a listing of the resource.
      *
@@ -55,10 +58,7 @@ class UsersController extends Controller
         if($validator->fails()) {
             return response($validator->errors(), 400);
         }
-        $image = $request->file('photo');
-        $image_name = $image->getClientOriginalName();
-
-        $image->move(public_path('/images/users/'), $image_name);
+        $image_name = $this->storeImage($request->file('photo'), 'users');
 
         return User::create([
             'name' => $request->name,
@@ -116,9 +116,7 @@ class UsersController extends Controller
             'address' => 'required',
             'phone' => 'required|numeric',
         ]);
-        $photo = $request->file('photo');
-        $image_name = $photo->getClientOriginalName();
-        $photo->move(public_path('/images/users/'), $image_name);
+        $image_name = $this->storeImage($request->file('photo'), 'users');
         User::find($id)->update([
             'name' => $request->name,
             'username' => $request->username,

@@ -4,12 +4,15 @@ namespace App\Http\Controllers\API;
 
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\StoresUploadedImages;
 use App\Http\Resources\ProductCollection;
 use App\Model\Product;
 use Ramsey\Uuid\Uuid;
 
 class ProductController extends Controller
 {
+    use StoresUploadedImages;
+
     /**
      * Display a listing of the resource.
      *
@@ -48,12 +51,7 @@ class ProductController extends Controller
             'photo.*' => 'image|mimes:jpeg,png,jpg,gif,svg|max:2048'
         ]);
 
-        // dd($photo->getClientOriginalName());
-        $photo = $request->file('photo');
-        $image_name = $photo->getClientOriginalName();
-        $photo->move('images/products', $photo->getClientOriginalName());
-
-
+        $image_name = $this->storeImage($request->file('photo'), 'products');
 
         $product = new Product;
         $product->uuid = Uuid::uuid4();
@@ -132,10 +130,7 @@ class ProductController extends Controller
         $update->stock = $request->stock;
         $update->category_id = $request->category;
         if($request->hasFile('photo')) {
-            $photo = $request->file('photo');
-            $image_name = $photo->getClientOriginalName();
-            $photo->move(public_path('images/products'), $image_name);
-            $update->image_name = $image_name;
+            $update->image_name = $this->storeImage($request->file('photo'), 'products');
         }
 
         $update->save();

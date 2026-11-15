@@ -4,11 +4,14 @@ namespace App\Http\Controllers\API;
 
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\StoresUploadedImages;
 use App\Http\Resources\CategoryCollection;
 use App\Model\Category;
 
 class CategoryController extends Controller
 {
+    use StoresUploadedImages;
+
     /**
      * Display a listing of the resource.
      *
@@ -45,12 +48,7 @@ class CategoryController extends Controller
         $name =  $request->name;
         $slug = str_slug($name,'-');
         $description = $request->description;
-        $image = $request->file('photo');
-
-        // return $request->all();
-
-        $imageName = $image->getClientOriginalName();
-        $image->move(public_path('/images/categories'), $imageName);
+        $imageName = $this->storeImage($request->file('photo'), 'categories');
 
         $insert = Category::create([
             'name' => $name,
@@ -98,25 +96,17 @@ class CategoryController extends Controller
         $slug = str_slug($name);
 
 
-        if($request->hasFile('photo')) {
-            $photo = $request->file('photo');
-            $image_name = $photo->getClientOriginalName();
-            $photo->move(public_path('/images/categories'), $image_name);
-    
-            Category::find($id)->update([
-                'name' => $name,
-                'description' => $description,
-                'slug' => $slug,
-                'image_name' => $image_name
-            ]);
-        }else{
-            Category::find($id)->update([
-                'name' => $name,
-                'description' => $description,
-                'slug' => $slug,
-            ]);
+        $data = [
+            'name' => $name,
+            'description' => $description,
+            'slug' => $slug,
+        ];
 
+        if($request->hasFile('photo')) {
+            $data['image_name'] = $this->storeImage($request->file('photo'), 'categories');
         }
+
+        Category::find($id)->update($data);
 
         return response(['success'=>true], 200);
     }

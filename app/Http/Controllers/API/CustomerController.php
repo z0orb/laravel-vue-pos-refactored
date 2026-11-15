@@ -4,12 +4,15 @@ namespace App\Http\Controllers\API;
 
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\StoresUploadedImages;
 use App\Models\Customer;
 use App\Http\Resources\CustomerCollection;
 use Validator;
 
 class CustomerController extends Controller
 {
+    use StoresUploadedImages;
+
     /**
      * Display a listing of the resource.
      *
@@ -57,10 +60,7 @@ class CustomerController extends Controller
         $customer->provinsi = $request->provinsi;
         $customer->email = $request->email;
         if($request->hasFile('photo')) {
-            $photo = $request->file('photo');
-            $image_name = $photo->getClientOriginalName();
-            $photo->move(public_path('/images/customers'), $image_name);
-            $customer->image_name = $image_name;
+            $customer->image_name = $this->storeImage($request->file('photo'), 'customers');
         }
 
         $customer->save();
