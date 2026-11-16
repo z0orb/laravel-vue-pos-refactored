@@ -21,30 +21,41 @@ class HomeController extends Controller
         $thisMonth = Carbon::now()->format('Y-m');
         $lastMonth = Carbon::now()->subMonth(1)->format('Y-m');
 
-        $data['transaksi_bulan_ini'] = Transaction::where('created_at','LIKE', '%'.$thisMonth.'%')->count();
-        $data['transaksi_bulan_lalu'] = Transaction::where('created_at','LIKE', '%'.$lastMonth.'%')->count();
-        $diff = $data['transaksi_bulan_ini'] -$data['transaksi_bulan_lalu'];
-        $more_less = $diff > 0 ? "+" : "-";
-        $diff = abs($diff);
-        $data['peningkatan_transaksi'] = $more_less.(($diff/($data['transaksi_bulan_lalu']!==0?:1))*100)."%";
+        $data['transaksi_bulan_ini'] = $this->countTransactionsInMonth($thisMonth);
+        $data['transaksi_bulan_lalu'] = $this->countTransactionsInMonth($lastMonth);
+        $data['peningkatan_transaksi'] = $this->growthPercentage($data['transaksi_bulan_ini'], $data['transaksi_bulan_lalu'], false);
         $data['average_price'] = Product::selectRaw("AVG(price+ (price * ppn/100) ) as average")->first()->average;
         $data['product_sold'] = TransactionDetail::selectRaw('SUM(quantity) as quantity')->first()->quantity;
         $data['product_sold_lastmo'] = TransactionDetail::selectRaw('SUM(quantity) as quantity')->where('created_at','LIKE',"%$lastMonth%")->first()->quantity;
-        $data['pendapatan_bulan_ini'] =  DB::table('order_details')
-            ->select(DB::raw("SUM(ppn) as fee"))
-            ->where('order_details.created_at','LIKE', '%'.$thisMonth.'%')
-            ->first()->fee;
-        $data['pendapatan_bulan_lalu'] =  DB::table('order_details')
-            ->select(DB::raw("SUM(ppn) as fee"))
-            ->where('order_details.created_at','LIKE', '%'.$lastMonth.'%')
-            ->first()->fee;
-        $diff = $data['pendapatan_bulan_ini'] -$data['pendapatan_bulan_lalu'];
-        $more_less = $diff >= 0 ? "+" : "-";
-        $diff = abs($diff);
-        $data['peningkatan_pendapatan'] = $more_less.(($diff/($data['pendapatan_bulan_lalu']!==0?:1))*100)."%";
-
+        $data['pendapatan_bulan_ini'] = $this->sumPpnInMonth($thisMonth);
+        $data['pendapatan_bulan_lalu'] = $this->sumPpnInMonth($lastMonth);
+        $data['peningkatan_pendapatan'] = $this->growthPercentage($data['pendapatan_bulan_ini'], $data['pendapatan_bulan_lalu'], true);
 
         return response()->json($data);
+    }
+
+    private function countTransactionsInMonth($month) {
+        return Transaction::where('created_at','LIKE', '%'.$month.'%')->count();
+    }
+
+    private function sumPpnInMonth($month) {
+        return DB::table('order_details')
+            ->select(DB::raw("SUM(ppn) as fee"))
+            ->where('order_details.created_at','LIKE', '%'.$month.'%')
+            ->first()->fee;
+    }
+
+    /**
+     * Format perubahan bulan ini terhadap bulan lalu, contoh "+25%".
+     * $zeroIsIncrease menjaga perbedaan lama: selisih nol pada transaksi
+     * ditampilkan "-0%", sedangkan pada pendapatan ditampilkan "+0%".
+     */
+    private function growthPercentage($current, $previous, $zeroIsIncrease) {
+        $diff = $current - $previous;
+        $isIncrease = $zeroIsIncrease ? $diff >= 0 : $diff > 0;
+        $sign = $isIncrease ? "+" : "-";
+
+        return $sign.((abs($diff)/($previous!==0?:1))*100)."%";
     }
     public function report() {
         $data = [];
